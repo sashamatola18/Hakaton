@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AstroHealth — здоров'я екіпажу</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232b2b30'/%3E%3Cpath d='M3 17h7l2-6 4 12 3-8 2 2h8' fill='none' stroke='%23ff5468' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* Пульт медичного контролю екіпажу.
+   Палітра: глибокий синьо-чорний «вакуум», панелі приладів, блакитний акцент приладової шкали;
+   зелений / бурштиновий / червоний лишаються тільки для стану здоров'я.
+   Шрифт цифр — Bahnschrift (DIN, як на авіаційних приладах), текст — Segoe UI.
+   Макет: траєкторія польоту й показники місії зліва, кабіна справа, під ними чотири картки екіпажу з живою ЕКГ. */
+:root{--bg:#060a12;--card:#0d131f;--deep:#131b2a;--line:#222d42;--tx:#e6ebf5;--mut:#8491a8;
+  --acc:#5cc8ff;--ok:#2fd08a;--warn:#ffb020;--crit:#ff4d5e;--focus:#8ad8ff;
+  --num:"Bahnschrift","DIN Alternate","Roboto Condensed","Segoe UI",system-ui,sans-serif;
+  --txt:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0 auto;max-width:1280px;padding:14px 16px 28px;font:14px/1.45 var(--txt);color:var(--tx);
+  background:radial-gradient(1200px 500px at 85% -10%,#12233f66,transparent 70%),
+    radial-gradient(1px 1px at 20px 30px,#ffffff55,transparent 100%),radial-gradient(1px 1px at 130px 90px,#ffffff33,transparent 100%),
+    radial-gradient(1.5px 1.5px at 80px 160px,#9fd0ff44,transparent 100%),var(--bg);
+  background-size:auto,190px 190px,230px 230px,310px 310px,auto;background-attachment:fixed}
+h1{font:600 19px/1 var(--num);margin:0;letter-spacing:.03em}
+h2{font:600 15px/1.2 var(--num);margin:0 0 12px;letter-spacing:.02em;color:var(--tx)}
+.mut{color:var(--mut);font-size:12px}
+.ok{--c:var(--ok)}.warn{--c:var(--warn)}.crit{--c:var(--crit)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+button{font:inherit;color:var(--tx);cursor:pointer}
+kbd{display:inline-block;min-width:18px;padding:0 5px;margin-left:6px;border:1px solid #33415c;border-bottom-width:2px;border-radius:4px;background:#0a101b;color:#b7c3d8;font:600 11px/16px var(--num);text-align:center}
+
+/* верхня смуга */
+.bar{display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo{width:40px;height:40px;border-radius:9px;overflow:hidden;background:var(--deep);flex:none;border:1px solid var(--line)}
+.logo svg,.logo img{width:100%;height:100%;display:block}
+.brand p{margin:2px 0 0;font-size:12px;color:var(--mut)}
+.met{font:600 15px/1 var(--num);color:var(--acc);font-variant-numeric:tabular-nums;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);white-space:nowrap}
+.met small{font:400 11px var(--txt);color:var(--mut);margin-right:6px}
+.conn{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--tx);border:1px solid var(--line);border-radius:99px;padding:4px 11px;background:var(--card);white-space:nowrap}
+.conn::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c);box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 25%,transparent)}
+.btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.btn{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px;white-space:nowrap;transition:border-color .12s,background .12s}
+.btn:hover{border-color:#3d4f72;background:var(--deep)}.btn:active{transform:translateY(1px)}
+.btn[aria-pressed="true"]{border-color:var(--acc);color:var(--acc);background:#0f2233}
+.btn.pri{background:#1668b8;border-color:#1f7fd9;color:#fff}.btn.pri:hover{background:#1c79d2}
+.btn.danger{border-color:var(--crit);color:var(--crit)}.btn.danger:hover{background:#ff4d5e1a}
+
+#banner{border:1px solid var(--line);border-left:5px solid var(--c);background:var(--card);border-radius:8px;padding:8px 12px;margin-bottom:10px}
+.chip{display:inline-block;margin:2px 6px 2px 0;padding:2px 10px;border:1px solid var(--c);border-radius:99px;color:var(--c);background:color-mix(in srgb,var(--c) 10%,transparent);font-size:12px}
+
+/* дашборд */
+.top{display:grid;grid-template-columns:5fr 7fr;gap:10px;margin-bottom:10px}
+.panel,.card,.pc,.status{background:linear-gradient(180deg,#101827,var(--card) 40%);border:1px solid var(--line);border-radius:12px;box-shadow:inset 0 1px 0 #ffffff08}
+.panel{padding:14px}
+.left{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(150px,.85fr);gap:14px;align-items:center;min-height:330px}
+.traj{min-width:0}.traj svg{width:100%;height:auto;display:block}
+.traj text{font:11px var(--txt);fill:var(--mut)}
+.stats{display:grid;gap:10px}
+.stat{background:var(--deep);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.stat small,.t small{display:block;color:var(--mut);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.stat b{font:600 25px/1.4 var(--num);font-variant-numeric:tabular-nums}
+.prog{height:4px;border-radius:2px;background:#ffffff12;margin-top:4px;overflow:hidden}.prog i{display:block;height:100%;background:var(--acc);border-radius:2px}
+.ctitle{text-align:center;font:600 13px var(--num);color:var(--tx);margin-bottom:6px}
+.leg{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;font-size:11px}
+.leg button{background:none;border:0;padding:2px 4px;border-radius:4px;color:var(--mut)}
+.leg button::before{content:"";display:inline-block;width:22px;height:9px;margin-right:6px;background:var(--c);border:2px solid color-mix(in srgb,var(--c) 60%,#fff);border-radius:2px;vertical-align:-1px}
+.leg button[aria-pressed="false"]{opacity:.4;text-decoration:line-through}
+.cwrap{position:relative}
+#cchart{width:100%;height:210px;display:block}
+#tip{position:absolute;pointer-events:none;background:#04080fee;border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:11px;white-space:nowrap;z-index:2}
+#tip i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;background:var(--c)}
+.row5{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:10px}
+.t{background:var(--deep);border:1px solid var(--line);border-radius:10px;padding:7px 6px;text-align:center;min-width:0}
+.t b{display:block;font:600 16px/1.35 var(--num);color:var(--c,var(--tx));font-variant-numeric:tabular-nums;white-space:nowrap}
+.t span{display:block;font-size:10px;color:var(--mut)}
+.t.warn,.t.crit{border-color:color-mix(in srgb,var(--c) 55%,var(--line))}.t.warn span,.t.crit span{color:var(--c)}
+.t.crit,.m.crit{background:color-mix(in srgb,var(--crit) 16%,var(--deep))}
+
+/* екіпаж */
+.crew{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.pc{position:relative;padding:12px;cursor:pointer;min-width:0;transition:border-color .12s,transform .12s}
+.pc:hover{border-color:#3d4f72;transform:translateY(-1px)}
+.pc.on{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc),0 8px 24px #0008}
+.pc.warn{border-top:3px solid var(--warn);padding-top:10px}
+.pc.crit{border-color:var(--crit);background:linear-gradient(180deg,#ff4d5e2e,var(--card) 70%);animation:alarm 1.2s ease-in-out infinite}
+@keyframes alarm{50%{box-shadow:0 0 0 3px #ff4d5e55}}
+.pc h3{margin:0;font:600 17px/1.2 var(--num);overflow-wrap:anywhere}
+.pc .num{position:absolute;top:8px;right:8px}
+.pc .more{display:block;margin-top:8px;font-size:11px;color:var(--acc)}
+.pc .scn{margin-top:6px;font-size:11px;color:var(--warn)}.pc .scn:empty{display:none}
+.who{display:flex;gap:12px;align-items:center}
+.who img,.ph{flex:none;width:78px;height:78px;border-radius:50%;object-fit:cover;background:linear-gradient(160deg,#25324a,#131b2a);border:2px solid var(--c,var(--line))}
+.ph{display:grid;place-items:center;font:700 24px var(--num);color:#b9c6dc}
+.who small{display:block;color:var(--mut);font-size:11px}.who small:first-child{color:var(--acc);font-weight:600;font-size:12px}
+.badge{display:inline-block;margin-top:5px;padding:1px 9px;border-radius:99px;font-size:11px;font-weight:700;color:#06101a;background:var(--c)}
+.ecg{display:block;width:100%;height:34px;margin-top:10px;border-radius:6px;background:#070c15;border:1px solid var(--line)}
+.row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.bad{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}.bad:empty{display:none}
+.bad span{font-size:11px;font-weight:600;padding:1px 7px;border-radius:5px;color:var(--c);border:1px solid var(--c);background:color-mix(in srgb,var(--c) 12%,transparent)}
+
+/* деталі */
+.status{border-left:6px solid var(--c);padding:12px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.status b{font:600 24px var(--num);color:var(--c)}
+.detail{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
+.col{display:grid;gap:10px;min-width:0}
+.card{padding:16px;min-width:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}
+.m{background:var(--deep);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:8px;padding:8px 10px}
+.m small{display:block;color:var(--mut);font-size:11px}.m b{font:600 23px var(--num);color:var(--c);font-variant-numeric:tabular-nums}.m span{color:var(--mut);margin-left:4px;font-size:11px}
+.m .dev{display:block;margin-top:2px;font-size:10px;color:var(--mut);font-style:normal;overflow-wrap:anywhere}
+ul{padding:0;list-style:none;margin:0;display:grid;gap:6px}
+li{border-left:4px solid var(--c);padding:7px 10px;background:var(--deep);border-radius:8px;overflow-wrap:anywhere}
+li::after{content:"";display:block;clear:both}
+li .btn{float:right;margin-left:8px;padding:2px 10px}
+.head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px}.head h2{margin:0}
+select,input{font:inherit;color:var(--tx);background:var(--deep);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+#chart{width:100%;height:170px;display:block}
+label{display:block;font-size:12px;color:var(--mut)}
+label input{width:100%;margin-top:3px}
+input:invalid{border-color:var(--crit)}
+form .btns{margin-top:10px}
+details summary{cursor:pointer;font-weight:600}
+details .btns{margin-top:10px}
+a{color:var(--acc)}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--mut);font-size:11px;font-weight:600;white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td.n{white-space:nowrap}td.n b{color:var(--c,var(--tx));font:600 14px var(--num)}td.n small{display:block;color:var(--mut);font-size:10px}
+td.crit,td.warn{background:color-mix(in srgb,var(--c) 12%,transparent)}
+#monthHead th{white-space:normal;min-width:64px}
+.tag{display:inline-block;margin-left:6px;padding:0 6px;border:1px solid var(--line);border-radius:99px;font-size:10px;color:var(--mut)}
+.full{margin-top:10px}
+#talk{max-height:300px;overflow-y:auto;padding-right:4px}
+#talk li{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:baseline}
+#talk li small{color:var(--mut);font-size:11px;font-variant-numeric:tabular-nums}
+#talk li b{color:var(--sp,var(--tx))}
+#talk li p{grid-column:1/-1;margin:0}
+#talk li.now{outline:1px solid var(--acc);background:#12283d}
+#sayForm{display:flex;gap:6px;margin-top:10px}#sayForm input{flex:1;min-width:0}
+
+/* діалоги й сповіщення */
+dialog{background:#0f1624;color:var(--tx);border:1px solid #33415c;border-radius:14px;padding:20px;max-width:min(580px,92vw);box-shadow:0 24px 80px #000c}
+dialog::backdrop{background:#02050bcc;backdrop-filter:blur(3px)}
+dialog[open]{animation:pop .16s ease-out}@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}}
+dialog h2{font-size:18px}
+dialog .btns{justify-content:flex-end;margin-top:16px}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;align-items:center}
+.keys kbd{margin:0 2px 0 0}
+#profile{max-width:min(760px,94vw);padding:0;overflow:hidden}
+.pf{display:grid;grid-template-columns:230px 1fr}
+.pfside{padding:22px 18px;text-align:center;background:linear-gradient(180deg,#16233a,#0c121d);border-right:1px solid var(--line)}
+.pfside img,.pfside .ph{width:170px;height:170px;border-radius:50%;margin:0 auto 12px;border:3px solid var(--c);font-size:56px;object-fit:cover;display:block}
+.pfside .ph{display:grid}
+.pfside h2{margin:0 0 2px;font-size:21px}.pfside .call{font:600 14px var(--num);color:var(--acc);margin:6px 0 8px}
+.pfmain{padding:20px;min-width:0;max-height:min(78vh,640px);overflow-y:auto}
+.pfmain h3{font:600 13px var(--num);color:var(--mut);margin:16px 0 8px}.pfmain h3:first-child{margin-top:0}
+dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:13px}
+dt{color:var(--mut)}dd{margin:0}
+.pfmain .grid{grid-template-columns:repeat(auto-fill,minmax(112px,1fr))}
+.pfmain .m b{font-size:19px}
+#toasts{position:fixed;right:16px;bottom:16px;display:grid;gap:8px;z-index:9;max-width:min(380px,calc(100vw - 32px))}
+.toast{background:#121b2b;border:1px solid var(--line);border-left:5px solid var(--c,var(--acc));border-radius:10px;padding:9px 12px;box-shadow:0 10px 30px #000a}
+
+@media(max-width:980px){.top{grid-template-columns:1fr}.left{min-height:0}.crew{grid-template-columns:1fr 1fr}.detail{grid-template-columns:1fr}}
+@media(max-width:560px){.crew{grid-template-columns:1fr}.row5{grid-template-columns:repeat(2,1fr)}.btn kbd{display:none}.left{grid-template-columns:1fr}.pf{grid-template-columns:1fr}.pfside{border-right:0;border-bottom:1px solid var(--line)}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media print{:root{color-scheme:light}html,body{background:#fff;color:#000}.bar .btns,details,#toasts,li .btn,.status .btns,form,kbd,.conn,.ecg,.more{display:none!important}#talk{max-height:none}
+  .card,.panel,.pc,.status,.t,.stat,.m,li,#banner,td{background:#fff!important;border-color:#999!important;color:#000;box-shadow:none}.mut,small,h2,.t span,th{color:#333!important}.t b,.m b,.stat b,h1,h3{color:#000!important}}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <div class="logo" id="logo"><svg viewBox="0 0 54 54" role="img" aria-label="AstroHealth"><rect width="54" height="54" fill="#2b2b30"/><ellipse cx="27" cy="24" rx="20" ry="8" fill="none" stroke="#5cc8ff" stroke-width="1.5" transform="rotate(-24 27 24)"/><path d="M7 26h11l3-8 5 15 4-10 2 3h15" fill="none" stroke="#ff4d5e" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/><text x="27" y="48" text-anchor="middle" font-size="9" font-weight="700" fill="#e9e9ee" font-family="Segoe UI,system-ui,sans-serif" letter-spacing="1">ASTRO</text></svg></div>
+    <div><h1>AstroHealth</h1><p>Медичний пульт екіпажу. Навчальна демонстрація, не медичний виріб.</p></div>
+    <span class="met" title="Час від початку місії"><small>Час місії</small><span id="met">T+ —</span></span>
+    <span class="conn ok" id="conn" role="status">З'єднання…</span>
+  </div>
+  <div class="btns" role="toolbar" aria-label="Керування">
+    <button class="btn" id="bPause" aria-pressed="false" onclick="togglePause()"><span>Пауза</span><kbd>P</kbd></button>
+    <button class="btn" id="bVoice" aria-pressed="false" onclick="toggleVoice()"><span>Голос: вимк</span><kbd>V</kbd></button>
+    <button class="btn" id="bSound" aria-pressed="false" onclick="toggleSound()"><span>Звук: вимк</span><kbd>M</kbd></button>
+    <button class="btn" id="bInc" aria-pressed="true" onclick="toggleIncidents()"><span>Випадкові події: увімк</span><kbd>I</kbd></button>
+    <button class="btn" onclick="resetAll()">Скинути сценарії<kbd>R</kbd></button>
+    <button class="btn" onclick="window.print()">Друк звіту</button>
+    <button class="btn" id="bFull" aria-pressed="false" onclick="toggleFull()">Повний екран<kbd>F</kbd></button>
+    <button class="btn" onclick="showHelp()">Клавіші<kbd>?</kbd></button>
+  </div>
+</header>
+<div id="banner" role="status" aria-live="polite" hidden></div>
+
+<div class="top">
+  <section class="panel left" aria-label="Місія">
+    <div class="traj"><svg id="traj" viewBox="0 0 300 210" role="img" aria-label="Траєкторія польоту: Земля, обліт Місяця, повернення">
+      <defs><radialGradient id="gE" cx=".35" cy=".35"><stop offset="0" stop-color="#7fd0ff"/><stop offset="1" stop-color="#1558b0"/></radialGradient>
+        <radialGradient id="gM" cx=".35" cy=".35"><stop offset="0" stop-color="#e6e9f0"/><stop offset="1" stop-color="#7b8496"/></radialGradient></defs>
+      <path id="trajAll" d="M52,105 C100,18 215,22 258,86 A19,19 0 0 1 258,124 C215,188 100,192 52,105" fill="none" stroke="#2b3a55" stroke-width="2" stroke-dasharray="3 5"/>
+      <path id="trajDone" d="M52,105 C100,18 215,22 258,86 A19,19 0 0 1 258,124 C215,188 100,192 52,105" fill="none" stroke="#5cc8ff" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="36" cy="105" r="18" fill="url(#gE)"/><circle cx="258" cy="105" r="9" fill="url(#gM)"/>
+      <text x="36" y="140" text-anchor="middle">Земля</text><text x="258" y="140" text-anchor="middle">Місяць</text>
+      <text x="150" y="16" text-anchor="middle">політ до Місяця</text><text x="150" y="204" text-anchor="middle">повернення</text>
+      <g id="ship"><circle r="9" fill="#5cc8ff33"/><circle r="4.5" fill="#fff" stroke="#5cc8ff" stroke-width="2"/></g>
+    </svg></div>
+    <div class="stats">
+      <div class="stat"><small>Відстань від Землі</small><b id="dist">—</b></div>
+      <div class="stat"><small>Залишилось часу</small><b id="left">—</b></div>
+      <div class="stat"><small>Місія виконана</small><b id="pct">—</b><div class="prog"><i id="pbar" style="width:0"></i></div></div>
+    </div>
+  </section>
+  <section class="panel" aria-label="Кабіна">
+    <div class="ctitle">Параметри кабіни</div>
+    <div class="leg" id="leg"></div>
+    <div class="cwrap"><canvas id="cchart" role="img" aria-label="Графік температури, тиску й кисню кабіни"></canvas><div id="tip" hidden></div></div>
+    <div class="row5" id="cabin"></div>
+  </section>
+</div>
+<div class="crew" id="crew"></div>
+
+<div class="status" id="status"><div><div class="mut" id="who"></div><b id="overall">…</b></div>
+  <span class="btns"><span class="mut" id="live"></span><button class="btn" onclick="openProfile()">Анкета<kbd>A</kbd></button><button class="btn danger" onclick="callDoctor()">Викликати лікаря польоту<kbd>D</kbd></button></span></div>
+
+<div class="detail">
+  <div class="col">
+    <div class="card"><h2>Показники</h2><div class="grid" id="metrics"></div></div>
+    <div class="card"><div class="head"><h2>Динаміка</h2><select id="metricSel" aria-label="Показник на графіку"></select></div><canvas id="chart" role="img" aria-label="Графік обраного показника"></canvas></div>
+    <div class="card"><h2>Пристрої астронавта</h2><div class="scroll"><table><thead><tr><th>Показник</th><th>Пристрій</th><th>Серійний №</th><th>Де закріплений</th><th>Зараз</th></tr></thead><tbody id="devices"></tbody></table></div></div>
+    <div class="card"><h2>Ввести показники вручну</h2>
+      <form id="manual" novalidate>
+        <div class="grid" id="form"></div>
+        <div class="btns"><button class="btn pri" type="submit">Зберегти вимір<kbd>Enter</kbd></button><button class="btn" type="button" onclick="clearForm()">Очистити</button></div>
+      </form>
+      <p class="mut">Порожні поля залишаються без змін. Щоб симуляція не перезаписала ваш вимір, поставте її на паузу (<b>P</b>).</p>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card"><div class="head"><h2>Переговори екіпажу</h2><span class="mut" id="voiceInfo">Голос вимкнено. Натисніть V, щоб чути репліки.</span></div>
+      <ul id="talk" aria-live="off"></ul>
+      <form id="sayForm"><input id="sayText" maxlength="300" autocomplete="off" aria-label="Репліка від імені обраного астронавта" placeholder="Сказати від імені обраного астронавта…"><button class="btn pri" type="submit">Сказати</button></form>
+    </div>
+    <div class="card" id="trendcard" hidden><h2>Раннє попередження</h2><ul id="trends"></ul></div>
+    <div class="card"><h2>Що робити</h2><ul id="actions"></ul></div>
+    <div class="card"><h2>Події</h2><ul id="events"></ul></div>
+    <div class="card"><h2>Журнал дій</h2><ul id="log"></ul><p style="margin:10px 0 0"><a id="export" href="#">Завантажити історію (CSV) для лікаря польоту</a><kbd>E</kbd></p></div>
+    <details class="card" id="demo"><summary>Режим демонстрації: змоделювати ситуацію для обраного астронавта</summary><div class="btns" id="sc"></div></details>
+  </div>
+</div>
+
+<div class="card full"><div class="head"><h2>Середні значення за місяць</h2><span><a id="exportM" href="#">Завантажити (CSV)</a></span></div>
+  <div class="scroll"><table><thead id="monthHead"></thead><tbody id="months"></tbody></table></div>
+  <p class="mut" style="margin:10px 0 0">У клітинці: середнє за місяць, під ним найменше і найбільше значення. Колір показує, у якій зоні середнє. Дані зберігаються в базі <b>astrohealth.db</b> (таблиці monthly_avg і monthly_status). Рядки з позначкою «демо» створені для прикладу.</p></div>
+<div class="card full"><h2>Норми показників і звідки вони</h2><div class="scroll"><table><thead><tr><th>Показник</th><th>Норма</th><th>Критично</th><th>Джерело норми</th></tr></thead><tbody id="norms"></tbody></table></div>
+  <p class="mut" style="margin:10px 0 0">Між нормою і критичною межею — зона «увага». Політ змодельовано за даними обльоту Місяця «Артеміда-2»: 9 діб 1 год 32 хв, найбільша відстань від Землі 406 771 км. Посилання на джерела — у файлі README.</p></div>
+<div class="card full"><h2>Пристрої кабіни</h2><div class="scroll"><table><thead><tr><th>Параметр</th><th>Пристрій</th><th>Серійний №</th><th>Де встановлений</th><th>Зараз</th></tr></thead><tbody id="cabinDev"></tbody></table></div></div>
+
+<dialog id="help" aria-labelledby="helpT">
+  <h2 id="helpT">Клавіші керування</h2>
+  <div class="keys">
+    <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd></span><span>Обрати астронавта</span>
+    <span><kbd>←</kbd><kbd>→</kbd></span><span>Попередній / наступний астронавт</span>
+    <span><kbd>A</kbd></span><span>Анкета обраного астронавта (або клацніть його картку)</span>
+    <span><kbd>P</kbd> або <kbd>Пробіл</kbd></span><span>Пауза / продовжити симуляцію</span>
+    <span><kbd>V</kbd></span><span>Голос переговорів екіпажу увімк / вимк</span>
+    <span><kbd>M</kbd></span><span>Звук тривоги увімк / вимк</span>
+    <span><kbd>I</kbd></span><span>Випадкові погіршення стану увімк / вимк</span>
+    <span><kbd>R</kbd></span><span>Скинути всі сценарії</span>
+    <span><kbd>F</kbd></span><span>Повний екран</span>
+    <span><kbd>D</kbd></span><span>Викликати лікаря польоту</span>
+    <span><kbd>E</kbd></span><span>Завантажити історію (CSV)</span>
+    <span><kbd>S</kbd></span><span>Перейти до ручного введення (<kbd>Enter</kbd> зберігає, <kbd>Esc</kbd> виходить)</span>
+    <span><kbd>T</kbd><kbd>B</kbd><kbd>O</kbd></span><span>Показати / сховати лінії: температура, тиск, кисень</span>
+    <span><kbd>Shift</kbd>+<kbd>1</kbd>…<kbd>9</kbd></span><span>Сценарій демонстрації для обраного астронавта (<kbd>Shift</kbd>+<kbd>0</kbd> — скинути)</span>
+    <span><kbd>?</kbd> <kbd>H</kbd> <kbd>F1</kbd></span><span>Ця довідка</span>
+    <span><kbd>Esc</kbd></span><span>Закрити вікно</span>
+  </div>
+  <p class="mut">Клавіші працюють у будь-якій розкладці клавіатури (українська, англійська).</p>
+  <div class="btns"><button class="btn pri" onclick="this.closest('dialog').close()">Зрозуміло</button></div>
+</dialog>
+<dialog id="profile" aria-labelledby="pfName"><div class="pf" id="pfBody"></div></dialog>
+<dialog id="ask" aria-labelledby="askT">
+  <h2 id="askT"></h2><p id="askP" class="mut"></p>
+  <div class="btns"><button class="btn" id="askNo">Скасувати<kbd>Esc</kbd></button><button class="btn pri" id="askYes">Підтвердити<kbd>Enter</kbd></button></div>
+</dialog>
+<div id="toasts" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+const L=["ok","warn","crit"],$=s=>document.querySelector(s);
+const ST=["Норма","Увага","Критично"];
+let missionLen=0;
+let SC={reset:"Скинути"};  // сценарії приходять із сервера (/api/meta)
+const V=[["temperature","Темп.","°C"],["heart_rate","Пульс","/хв"],["resp_rate","Дихання","/хв"]];
+// лінії графіка кабіни: ключ, назва, колір, діапазон шкали (кожна лінія має власну шкалу), клавіша
+const SER=[["temp","Температура","#e0457b",20.5,24.5,"T"],["pressure","Тиск","#3b9be0",99.8,102.2,"B"],["oxygen","Кисень","#2fd08a",20.5,22.5,"O"]];
+let crew=[],cur=null,acts=[],prev={},ctx=null,cabinItems=[],cabinActs=[],cabinHist=[],hist=[];
+let offline=false,endAt=0,paused=false,simOn=true,incidents=true,sound=false,META=null,busy=false,cpts=[];
+// та сама класифікація, що й на сервері: 0 норма, 1 увага, 2 критично
+function levelOf(key,v){const m=META.metrics[key],[wl,wh]=m.warn,[cl,ch]=m.crit;
+  return cl!=null&&v<cl||ch!=null&&v>ch?2:wl!=null&&v<wl||wh!=null&&v>wh?1:0}
+const off=new Set();
+
+/* ---------- допоміжне ---------- */
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtT=ts=>new Date(ts*1000).toLocaleTimeString("uk");
+// оновлює DOM лише коли вміст змінився: не збиває фокус і не мерехтить
+function setHTML(el,html){if(el._h!==html){el._h=html;el.innerHTML=html}}
+function toast(text,level){
+  const t=document.createElement("div");t.className="toast "+(level==null?"":L[level]);t.textContent=text;
+  $("#toasts").append(t);setTimeout(()=>t.remove(),level===2?7000:3500);
+}
+async function api(path,body){
+  const r=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{cache:"no-store"});
+  let d=null;try{d=await r.json()}catch(e){}
+  if(!r.ok)throw new Error(d&&d.error||"Помилка сервера ("+r.status+")");
+  return d;
+}
+// виконує дію користувача й показує зрозумілу помилку, якщо щось пішло не так
+async function act(fn,okText){
+  try{await fn();if(okText)toast(okText,0);await refresh(true)}
+  catch(e){toast(e instanceof TypeError?"Немає зв'язку із сервером. Дію не виконано.":e.message,2)}
+}
+function ask(title,text,onYes){
+  const d=$("#ask");$("#askT").textContent=title;$("#askP").textContent=text;
+  $("#askYes").onclick=()=>{d.close();onYes()};$("#askNo").onclick=()=>d.close();
+  d.showModal();$("#askYes").focus();
+}
+function audio(){try{ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();if(ctx.state=="suspended")ctx.resume()}catch(e){}}
+function beep(){
+  if(!ctx||!sound)return;
+  [0,.25].forEach(d=>{const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=880;g.gain.value=.15;
+    o.connect(g).connect(ctx.destination);o.start(ctx.currentTime+d);o.stop(ctx.currentTime+d+.18)});
+}
+
+/* ---------- відображення ---------- */
+function stLabel(i){return i.level==2?"Критично":i.level==1?(i.side=="low"?"Низько":"Високо"):"Норма"}
+function tile(i){return `<div class="t ${L[i.level]}"><small>${esc(i.name)}</small><b>${esc(i.value)} ${esc(i.unit)}</b><span>${stLabel(i)}</span></div>`}
+function vitals(c){return V.map(([k,l,u])=>{const x=c.items.find(y=>y.key==k);return x?tile({...x,name:l,unit:u}):`<div class="t"><small>${l}</small><b>—</b><span>немає даних</span></div>`}).join("")}
+function photo(i,c){return META.photos[i]?`<img src="/photos/${i}" alt="" data-ini="${esc(c.astronaut[0])}">`:`<div class="ph">${esc(c.astronaut[0])}</div>`}
+function renderCrew(){
+  const box=$("#crew");
+  if(box.children.length!=crew.length)box.innerHTML=crew.map((c,i)=>`<div class="pc" tabindex="0" role="button" data-i="${i}"><kbd class="num" title="Клавіша ${i+1}">${i+1}</kbd><div class="who">${photo(i,c)}<div><small>${esc(c.role)}</small><h3>${esc(c.astronaut)}</h3><small>Нар. ${esc(c.dob)}, ${c.age} р.</small><span class="badge"></span></div></div><canvas class="ecg" aria-hidden="true"></canvas><div class="row"></div><div class="bad"></div><div class="scn"></div><span class="more">Клацніть, щоб відкрити анкету</span></div>`).join("");
+  crew.forEach((c,i)=>{const el=box.children[i];
+    el.className="pc "+L[c.overall]+(c.astronaut==cur?" on":"");
+    el.setAttribute("aria-pressed",c.astronaut==cur);
+    el.setAttribute("aria-label",`${c.astronaut}, ${c.role}. Стан: ${c.label}`);
+    setHTML(el.querySelector(".row"),vitals(c));
+    el.querySelector(".badge").textContent=ST[c.overall];
+    const hr=c.items.find(x=>x.key=="heart_rate");ecgState[i]={bpm:hr?hr.value:0,level:hr?hr.level:0};
+    // показники поза нормою, яких немає серед трьох плиток картки (SpO₂, тиск тощо)
+    setHTML(el.querySelector(".bad"),c.items.filter(i=>i.level&&!V.some(v=>v[0]==i.key)).map(i=>`<span class="${L[i.level]}">${esc(i.name)} ${esc(i.value)} ${esc(i.unit)}</span>`).join(""));
+    const why=c.incident?"Раптове погіршення: "+(SC[c.incident]||c.incident):c.scenario?"Сценарій: "+(SC[c.scenario]||c.scenario):"";
+    setHTML(el.querySelector(".scn"),esc(why));
+  });
+}
+function renderBanner(){
+  const b=$("#banner"),chips=[];
+  crew.forEach((c,i)=>{if(c.overall)chips.push([c.overall,`<button class="chip ${L[c.overall]}" onclick="pick(${i})">${esc(c.astronaut)}: ${ST[c.overall].toLowerCase()}</button>`])});
+  cabinItems.forEach(i=>{if(i.level)chips.push([i.level,`<span class="chip ${L[i.level]}">Кабіна: ${esc(i.name)} ${esc(i.value)} ${esc(i.unit)}</span>`])});
+  b.hidden=!offline&&!chips.length;
+  b.className=L[offline?2:Math.max(0,...chips.map(x=>x[0]))];
+  setHTML(b,offline?"<b>Зв'язок із сервером втрачено.</b> Дані можуть бути застарілими. Перевірте, чи запущено програму.":chips.map(x=>x[1]).join(" "));
+  document.title=(chips.length?`(${chips.length}) `:"")+"AstroHealth — здоров'я екіпажу";
+  const c=$("#conn");
+  c.className="conn "+(offline?"crit":paused||!simOn?"warn":"ok");
+  c.textContent=offline?"Немає зв'язку":!simOn?"Симуляцію вимкнено":paused?"Пауза":"На зв'язку";
+  $("#bPause").setAttribute("aria-pressed",paused);
+  $("#bPause span").textContent=paused?"Продовжити":"Пауза";
+  $("#bInc").setAttribute("aria-pressed",incidents);
+  $("#bInc span").textContent="Випадкові події: "+(incidents?"увімк":"вимк");
+  $("#live").textContent=offline?"Дані застарілі":!simOn?"Лише ручне введення":paused?"Симуляцію призупинено":"Оновлюється кожні "+(META?META.interval:2)+" с";
+}
+function renderCabin(d){
+  const m=d.mission;
+  $("#dist").textContent=m.distance_km.toLocaleString("uk")+" км";
+  $("#pct").textContent=m.percent.toLocaleString("uk",{minimumFractionDigits:1})+"%";
+  $("#pbar").style.width=m.percent+"%";moveShip(m.percent/100);
+  endAt=Date.now()+m.remaining_s*1000;missionLen=m.duration_s;clock();
+  setHTML($("#cabin"),d.items.map(tile).join(""));
+  setHTML($("#cabinDev"),d.items.map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.device.name)}</td><td class="n">${esc(i.device.serial)}</td><td>${esc(i.device.place)}</td><td class="n ${L[i.level]}"><b>${esc(i.value)} ${esc(i.unit)}</b></td></tr>`).join(""));
+  cabinItems=d.items;cabinActs=d.actions;paused=d.paused;simOn=d.sim;incidents=d.incidents;cabinHist=d.history;
+  drawCabin();
+}
+function renderEvents(ev){
+  setHTML($("#events"),ev.length?ev.map(e=>`<li class="${L[e.level]}"><b>${fmtT(e.ts)}</b> ${esc(e.text)}</li>`).join(""):'<li class="ok">Подій поки немає.</li>');
+}
+function renderDetail(){
+  const c=crew.find(x=>x.astronaut==cur);if(!c)return;
+  $("#status").className="status "+L[c.overall];
+  $("#who").textContent=c.role+" · "+c.astronaut;
+  $("#overall").textContent="Стан: "+c.label;
+  setHTML($("#metrics"),c.items.map(i=>`<div class="m ${L[i.level]}"><small>${esc(i.name)}</small><b>${esc(i.value)}</b><span>${esc(i.unit)}</span><em class="dev">${i.manual?"введено вручну":esc(i.device.name)}</em></div>`).join(""));
+  setHTML($("#devices"),c.items.map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.device.name)}${i.manual?'<span class="tag">вручну</span>':""}</td><td class="n">${esc(i.device.serial)}</td><td>${esc(i.device.place)}</td><td class="n ${L[i.level]}"><b>${esc(i.value)} ${esc(i.unit)}</b></td></tr>`).join(""));
+  $("#exportM").href="/api/export-monthly?astronaut="+encodeURIComponent(cur);
+  acts=c.actions.filter(a=>a.level||!cabinActs.length).concat(cabinActs);
+  setHTML($("#actions"),acts.map((a,i)=>`<li class="${L[a.level]}">${a.level?`<button class="btn" onclick="done(${i})">Виконано</button>`:""}<b>${esc(a.metric)}:</b> ${esc(a.text)}</li>`).join(""));
+  $("#trendcard").hidden=!c.trends.length;
+  setHTML($("#trends"),c.trends.map(t=>`<li class="${L[t.level]}"><b>${esc(t.metric)}</b> ${esc(t.text)}</li>`).join(""));
+  document.querySelectorAll("#form input").forEach(e=>{const x=c.items.find(i=>i.key==e.name);e.placeholder=x?x.value:""});
+  $("#export").href="/api/export?astronaut="+encodeURIComponent(cur);
+}
+function renderLog(log){
+  setHTML($("#log"),log.length?log.map(a=>`<li class="ok"><b>${fmtT(a.ts)}</b> ${esc(a.text)}</li>`).join(""):'<li class="ok">Поки що дій не зафіксовано.</li>');
+}
+
+const MONTHS=["січень","лютий","березень","квітень","травень","червень","липень","серпень","вересень","жовтень","листопад","грудень"];
+function renderMonthly(rows){
+  const keys=Object.keys(META.metrics);
+  setHTML($("#monthHead"),"<tr><th>Місяць</th>"+keys.map(k=>`<th>${esc(META.metrics[k].name)}, ${esc(META.metrics[k].unit)}</th>`).join("")+"<th>Вимірів</th><th>Увага</th><th>Критично</th></tr>");
+  setHTML($("#months"),rows.length?rows.map(r=>{const [y,m]=r.month.split("-");
+    return `<tr><td class="n"><b>${MONTHS[m-1]} ${y}</b>${r.demo?'<span class="tag">демо</span>':""}</td>`+keys.map(k=>{const x=r.metrics[k];
+      return x?`<td class="n ${L[levelOf(k,x.avg)]}"><b>${x.avg.toLocaleString("uk",{maximumFractionDigits:1})}</b><small>${x.min} – ${x.max}</small></td>`:"<td>—</td>"}).join("")+
+      `<td class="n">${r.readings.toLocaleString("uk")}</td><td class="n ${r.warn?"warn":""}"><b>${r.warn}</b></td><td class="n ${r.crit?"crit":""}"><b>${r.crit}</b></td></tr>`}).join(""):`<tr><td colspan="${keys.length+4}">Даних ще немає.</td></tr>`);
+}
+
+/* ---------- переговори екіпажу та озвучення ---------- */
+const TALK_COL=["#5cc8ff","#ff9ec4","#c9a7ff","#7fe0c8"],PITCH=[0.75,1.0,1.3,0.55],RATE=[1.0,1.05,1.1,0.95];
+const monthly={};
+let voiceOn=false,spokenId=null,ukVoices=[],talkRows=[];
+function loadVoices(){
+  if(!("speechSynthesis" in window))return;
+  ukVoices=speechSynthesis.getVoices().filter(v=>/^uk/i.test(v.lang));
+  voiceInfo();
+}
+function voiceInfo(){
+  const el=$("#voiceInfo");
+  if(!("speechSynthesis" in window))el.textContent="Цей браузер не вміє озвучувати текст.";
+  else if(!voiceOn)el.textContent="Голос вимкнено. Натисніть V, щоб чути репліки.";
+  else if(!ukVoices.length)el.textContent="Українського голосу не знайдено: вимова може бути неправильною.";
+  else el.textContent="Голосів: "+ukVoices.length+" ("+ukVoices.map(v=>v.name.replace(/^(Microsoft|Google)\s+/,"").split(" ")[0]).join(", ")+")";
+}
+function speak(row){
+  const i=Math.max(0,META.crew.indexOf(row.speaker)),u=new SpeechSynthesisUtterance(row.text);
+  u.lang="uk-UA";
+  // жіночий голос для жінок, чоловічий для чоловіків (в Edge: «Поліна» та «Остап»)
+  const fem=!!META.female[i],isF=v=>/polina|поліна|female|woman/i.test(v.name),pool=ukVoices.filter(v=>isF(v)==fem);
+  if(pool.length)u.voice=pool[i%pool.length];else if(ukVoices.length)u.voice=ukVoices[i%ukVoices.length];
+  // у кожного своя висота й темп, щоб голоси розрізнялися
+  u.pitch=fem?(pool.length?1.1:1.5):[0.8,1,1.15,0.55][i%4];u.rate=RATE[i%4];
+  u.onstart=()=>mark(row.id);u.onend=u.onerror=()=>mark(null);
+  speechSynthesis.speak(u);
+}
+function mark(id){document.querySelectorAll("#talk li").forEach(li=>li.classList.toggle("now",id!=null&&li.dataset.id==id))}
+function renderDialogue(rows){
+  talkRows=rows;
+  const box=$("#talk"),atEnd=box.scrollHeight-box.scrollTop-box.clientHeight<30,before=box._h;
+  setHTML(box,rows.length?rows.map(r=>{const i=META.crew.indexOf(r.speaker);
+    return `<li class="${L[r.level]}" data-id="${r.id}" style="--sp:${TALK_COL[i%4]||"inherit"}"><b>${esc(r.speaker)}</b><small>${fmtT(r.ts)}</small><p>${esc(r.text)}</p></li>`}).join(""):'<li class="ok">Поки що тихо. Екіпаж заговорить за кілька секунд.</li>');
+  if(box._h!==before&&atEnd)box.scrollTop=box.scrollHeight;
+  const last=rows.length?rows[rows.length-1].id:0;
+  if(spokenId===null){spokenId=last;box.scrollTop=box.scrollHeight;return}   // стару історію не озвучуємо
+  const fresh=rows.filter(r=>r.id>spokenId);spokenId=Math.max(spokenId,last);
+  if(!voiceOn||!fresh.length||!("speechSynthesis" in window))return;
+  if(fresh.some(r=>r.level==2)||speechSynthesis.pending&&fresh.length>4)speechSynthesis.cancel();  // тривога перебиває розмову
+  fresh.forEach(speak);
+}
+function toggleVoice(){
+  if(!("speechSynthesis" in window))return toast("Цей браузер не вміє озвучувати текст. Спробуйте Edge або Chrome.",1);
+  voiceOn=!voiceOn;loadVoices();
+  $("#bVoice").setAttribute("aria-pressed",voiceOn);$("#bVoice span").textContent="Голос: "+(voiceOn?"увімк":"вимк");
+  if(!voiceOn){speechSynthesis.cancel();mark(null);return}
+  if(!ukVoices.length)toast("Українського голосу не знайдено. Відкрийте панель у Microsoft Edge або додайте український голос у Windows (Параметри → Час і мова → Мовлення).",1);
+  const last=talkRows[talkRows.length-1];
+  if(last)speak(last);else speechSynthesis.speak(Object.assign(new SpeechSynthesisUtterance("Голос увімкнено"),{lang:"uk-UA"}));
+}
+function sayAs(){
+  const t=$("#sayText").value.trim();if(!t||!cur)return;
+  act(async()=>{await api("/api/dialogue",{astronaut:cur,text:t});$("#sayText").value=""});
+}
+
+/* ---------- траєкторія, ЕКГ на картках, анкета ---------- */
+function moveShip(p){
+  const path=$("#trajAll"),len=path.getTotalLength(),pt=path.getPointAtLength(len*Math.min(Math.max(p,0),1));
+  $("#trajDone").style.strokeDasharray=`${len*p} ${len}`;
+  $("#ship").setAttribute("transform",`translate(${pt.x},${pt.y})`);
+}
+// форма одного удару серця (фаза 0..1): зубці P, QRS, T
+function beat(ph){const g=(c,w,a)=>a*Math.exp(-((ph-c)**2)/(2*w*w));
+  return g(.18,.03,.12)-g(.36,.012,.18)+g(.4,.014,1)-g(.44,.014,.28)+g(.66,.05,.25)}
+const ecgState=[],COL=["#2fd08a","#ffb020","#ff4d5e"],still=matchMedia("(prefers-reduced-motion: reduce)");
+let ecgPhase=[],ecgLast=0;
+function drawEcg(now){
+  const dt=ecgLast?(now-ecgLast)/1000:0;ecgLast=now;
+  document.querySelectorAll(".ecg").forEach((cv,i)=>{
+    const st=ecgState[i];if(!st||!cv.clientWidth)return;
+    const r=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;
+    if(cv.width!=Math.round(W*r)){cv.width=Math.round(W*r);cv.height=Math.round(H*r)}
+    const g=cv.getContext("2d");g.setTransform(r,0,0,r,0,0);g.clearRect(0,0,W,H);
+    if(!paused&&!offline&&!still.matches)ecgPhase[i]=(ecgPhase[i]||0)+dt*st.bpm/60;
+    const beats=W/70,ph0=ecgPhase[i]||0;                 // на стрічці видно ~W/70 ударів
+    g.strokeStyle=COL[st.level];g.lineWidth=1.6;g.lineJoin="round";g.beginPath();
+    for(let x=0;x<=W;x+=1.5){const ph=((ph0+x/W*beats)%1+1)%1,y=H*.68-beat(ph)*H*.55;x?g.lineTo(x,y):g.moveTo(x,y)}
+    g.stroke();
+  });
+  requestAnimationFrame(drawEcg);
+}
+function openProfile(i){
+  if(i==null)i=crew.findIndex(c=>c.astronaut==cur);
+  const c=crew[i];if(!c)return;
+  const p=c.profile,mon=(monthly[c.astronaut]||[]).find(m=>!m.demo);
+  $("#pfBody").innerHTML=`<div class="pfside ${L[c.overall]}">${photo(i,c)}<h2 id="pfName">${esc(c.astronaut)}</h2><div class="mut">${esc(c.role)}</div>
+    <div class="call">Позивний «${esc(p.callsign)}»</div><div class="mut" style="margin-bottom:8px">Група крові ${esc(p.blood)}</div><span class="badge">${ST[c.overall]}</span></div>
+  <div class="pfmain"><h3>Анкета</h3><dl>
+    <dt>Дата народження</dt><dd>${esc(c.dob)} (${c.age} р.)</dd>
+    <dt>Спеціальність</dt><dd>${esc(p.specialty)}</dd>
+    <dt>Обов'язки на борту</dt><dd>${esc(p.duties)}</dd>
+    <dt>Дії в аварійній ситуації</dt><dd>${esc(p.emergency)}</dd>
+    <dt>Досвід</dt><dd>польотів: ${p.missions}, годин у космосі: ${p.space_hours}, виходів у відкритий космос: ${p.eva}</dd>
+    <dt>Мови</dt><dd>${esc(p.languages)}</dd></dl>
+  <h3>Медична картка</h3><dl>
+    <dt>Група крові</dt><dd>${esc(p.blood)}</dd><dt>Алергії</dt><dd>${p.allergies=="немає"?"немає":`<span class="chip warn">${esc(p.allergies)}</span>`}</dd>
+    <dt>Останній огляд</dt><dd>${esc(p.last_check)}</dd>
+    <dt>Цього місяця</dt><dd>${mon?`вимірів: ${mon.readings}, «увага»: ${mon.warn}, «критично»: ${mon.crit}`:"даних ще немає"}</dd></dl>
+  <h3>Показники зараз</h3><div class="grid">${c.items.map(x=>`<div class="m ${L[x.level]}"><small>${esc(x.name)}</small><b>${esc(x.value)}</b><span>${esc(x.unit)}</span></div>`).join("")}</div>
+  <div class="btns"><button class="btn danger" onclick="$('#profile').close();callDoctor()">Викликати лікаря польоту</button><button class="btn pri" onclick="$('#profile').close()">Закрити<kbd>Esc</kbd></button></div></div>`;
+  const d=$("#profile");if(!d.open)d.showModal();
+  const im=d.querySelector(".pfside img");if(im)im.onerror=()=>{const x=document.createElement("div");x.className="ph";x.textContent=im.dataset.ini;im.replaceWith(x)};
+}
+
+/* ---------- графіки ---------- */
+function prep(cv){
+  const r=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;
+  cv.width=Math.round(w*r);cv.height=Math.round(h*r);
+  const g=cv.getContext("2d");g.setTransform(r,0,0,r,0,0);g.clearRect(0,0,w,h);return[g,w,h];
+}
+function drawCabin(){
+  const [g,W,Hh]=prep($("#cchart")),h=cabinHist,P=26,T=12,H=Hh-T-28;cpts=[];
+  g.font="10px 'Segoe UI',system-ui,sans-serif";g.textAlign="center";
+  if(h.length<2){g.fillStyle="#8491a8";g.fillText(simOn?"Збираємо дані…":"Симуляцію вимкнено: історії кабіни немає",W/2,Hh/2);return}
+  const n=Math.min(9,h.length),pts=Array.from({length:n},(_,i)=>h[Math.round(i*(h.length-1)/(n-1))]);
+  const X=i=>P+i/(n-1)*(W-2*P),Y=(v,lo,hi)=>T+H-Math.min(Math.max((v-lo)/(hi-lo),0),1)*H;
+  g.strokeStyle="#ffffff0d";g.lineWidth=1;
+  for(let i=0;i<=4;i++){g.beginPath();g.moveTo(P,T+H*i/4+.5);g.lineTo(W-P,T+H*i/4+.5);g.stroke()}
+  SER.forEach(([k,,col,lo,hi])=>{if(off.has(k))return;
+    g.strokeStyle=g.fillStyle=col;g.lineWidth=2;g.lineJoin="round";g.beginPath();
+    pts.forEach((r,i)=>{i?g.lineTo(X(i),Y(r[k],lo,hi)):g.moveTo(X(i),Y(r[k],lo,hi))});g.stroke();
+    pts.forEach((r,i)=>{g.beginPath();g.arc(X(i),Y(r[k],lo,hi),i==n-1?4:3,0,6.3);g.fill()})});
+  g.fillStyle="#8491a8";
+  const step=(W-2*P)/(n-1)<58?2:1;
+  pts.forEach((r,i)=>{if((n-1-i)%step==0)g.fillText(fmtT(r.ts),X(i),Hh-8)});
+  cpts=pts.map((r,i)=>[X(i),r]);
+}
+function cabinTip(ev){
+  const tip=$("#tip");if(!cpts.length){tip.hidden=true;return}
+  const box=$("#cchart").getBoundingClientRect(),x=ev.clientX-box.left;
+  const [px,r]=cpts.reduce((a,b)=>Math.abs(b[0]-x)<Math.abs(a[0]-x)?b:a);
+  tip.innerHTML=`<b>${fmtT(r.ts)}</b><br>`+SER.filter(s=>!off.has(s[0])).map(([k,n,col])=>{const it=cabinItems.find(i=>i.key==k);return `<i style="--c:${col}"></i>${n}: ${r[k]} ${it?esc(it.unit):""}`}).join("<br>");
+  tip.hidden=false;tip.style.top="8px";
+  tip.style.left=Math.min(Math.max(px+10,0),box.width-tip.offsetWidth)+"px";
+  if(px+10+tip.offsetWidth>box.width)tip.style.left=Math.max(px-10-tip.offsetWidth,0)+"px";
+}
+function drawMetric(){
+  const [g,W,H]=prep($("#chart")),key=$("#metricSel").value,m=META&&META.metrics[key];
+  g.font="10px 'Segoe UI',system-ui,sans-serif";
+  if(!m)return;
+  const v=hist.map(x=>x.data[key]).filter(x=>x!=null);
+  if(v.length<2){g.fillStyle="#8491a8";g.textAlign="center";g.fillText("Недостатньо вимірів для графіка",W/2,H/2);return}
+  const th=[...m.warn,...m.crit].filter(x=>x!=null);
+  let lo=Math.min(...v,...th),hi=Math.max(...v,...th);const pad=(hi-lo||1)*.08;lo-=pad;hi+=pad;
+  const PL=34,PR=44,T=8,B=8,Y=y=>T+(H-T-B)*(1-(y-lo)/(hi-lo)),X=i=>PL+i/(v.length-1)*(W-PL-PR);
+  const [wl,wh]=m.warn,[cl,ch]=m.crit;
+  g.fillStyle="rgba(47,208,138,.10)";g.fillRect(PL,Y(wh??hi),W-PL-PR,Y(wl??lo)-Y(wh??hi));  // зона норми
+  g.textAlign="right";g.textBaseline="middle";
+  [[wl,"#ffb020"],[wh,"#ffb020"],[cl,"#ff4d5e"],[ch,"#ff4d5e"]].forEach(([y,col])=>{if(y==null)return;
+    g.strokeStyle=col+"88";g.setLineDash([4,4]);g.lineWidth=1;g.beginPath();g.moveTo(PL,Y(y));g.lineTo(W-PR,Y(y));g.stroke();
+    g.fillStyle="#8491a8";g.fillText(y,PL-5,Y(y))});
+  g.setLineDash([]);
+  g.beginPath();v.forEach((y,i)=>{i?g.lineTo(X(i),Y(y)):g.moveTo(X(i),Y(y))});
+  g.strokeStyle="#5cc8ff";g.lineWidth=2;g.lineJoin="round";g.stroke();
+  g.lineTo(X(v.length-1),H-B);g.lineTo(PL,H-B);g.closePath();g.fillStyle="rgba(92,200,255,.08)";g.fill();
+  const last=v[v.length-1],c=crew.find(x=>x.astronaut==cur),it=c&&c.items.find(i=>i.key==key);
+  g.fillStyle=["#2fd08a","#ffb020","#ff4d5e"][it?it.level:0];
+  g.beginPath();g.arc(X(v.length-1),Y(last),4,0,6.3);g.fill();
+  g.textAlign="left";g.font="bold 12px 'Segoe UI',system-ui,sans-serif";g.fillText(last,W-PR+8,Y(last));
+}
+
+/* ---------- оновлення даних ---------- */
+async function refresh(force){
+  if(busy&&!force)return;busy=true;
+  try{
+    if(!META)await loadMeta();
+    const [cr,cab,ev,dlg]=await Promise.all([api("/api/crew"),api("/api/cabin"),api("/api/events"),api("/api/dialogue")]);
+    crew=cr;
+    if(crew.some(c=>c.overall==2&&prev[c.astronaut]!==undefined&&prev[c.astronaut]!=2))beep();
+    crew.forEach(c=>prev[c.astronaut]=c.overall);
+    if((!cur||!crew.some(c=>c.astronaut==cur))&&crew.length)cur=crew[0].astronaut;
+    renderCabin(cab);renderCrew();renderEvents(ev);renderDetail();renderDialogue(dlg);
+    if(cur){
+      const who=cur,q=encodeURIComponent(who);
+      const [h,log,mon]=await Promise.all([api("/api/history?astronaut="+q),api("/api/actions?astronaut="+q),api("/api/monthly?astronaut="+q)]);
+      monthly[who]=mon;
+      if(who==cur){hist=h;drawMetric();renderLog(log);renderMonthly(mon)}  // якщо за цей час обрали іншого — не показуємо чужі дані
+    }
+    offline=false;
+  }catch(e){offline=true}
+  finally{busy=false;renderBanner()}
+}
+async function loadMeta(){
+  META=await api("/api/meta");
+  SC={...META.scenarios,reset:"Скинути"};
+  $("#sc").innerHTML=Object.entries(SC).map(([k,v],i)=>`<button class="btn" onclick="scenario('${k}')">${esc(v)}<kbd>⇧${k=="reset"?0:i+1}</kbd></button>`).join("");
+  const rng=(a,b,u)=>a!=null&&b!=null?`${a} – ${b}`:a!=null?`від ${a}`:`до ${b}`;
+  $("#norms").innerHTML=Object.values(META.metrics).map(m=>`<tr><td>${esc(m.name)}, ${esc(m.unit)}</td><td class="n ok"><b>${rng(m.warn[0],m.warn[1])}</b></td><td class="n crit"><b>${[m.crit[0]!=null?"нижче "+m.crit[0]:"",m.crit[1]!=null?"вище "+m.crit[1]:""].filter(Boolean).join(" або ")}</b></td><td>${esc(m.source)}</td></tr>`).join("");
+  if(META.logo)$("#logo").innerHTML='<img src="/photos/logo" alt="Логотип місії">';
+  $("#metricSel").innerHTML=Object.entries(META.metrics).map(([k,m])=>`<option value="${k}">${esc(m.name)}, ${esc(m.unit)}</option>`).join("");
+  $("#form").innerHTML=Object.entries(META.metrics).map(([k,m])=>`<label>${esc(m.name)}, ${esc(m.unit)}<input id="f_${k}" name="${k}" type="number" inputmode="decimal" step="any" min="${m.limits[0]}" max="${m.limits[1]}" title="Від ${m.limits[0]} до ${m.limits[1]}"></label>`).join("");
+}
+
+/* ---------- дії ---------- */
+function pick(i){if(!crew[i])return;cur=crew[i].astronaut;hist=[];renderCrew();renderDetail();drawMetric();refresh(true)}
+function step(d){const i=crew.findIndex(c=>c.astronaut==cur);if(crew.length)pick((i+d+crew.length)%crew.length)}
+function togglePause(){
+  if(!simOn)return toast("Симуляцію вимкнено параметром --no-sim.",1);
+  act(()=>api("/api/control",{action:paused?"resume":"pause"}),paused?"Симуляцію відновлено":"Симуляцію призупинено");
+}
+function toggleIncidents(){
+  if(!simOn)return toast("Симуляцію вимкнено параметром --no-sim.",1);
+  act(()=>api("/api/control",{action:incidents?"incidents_off":"incidents_on"}),incidents?"Випадкові погіршення вимкнено":"Випадкові погіршення увімкнено");
+}
+function resetAll(){act(()=>api("/api/control",{action:"reset"}),"Усі сценарії скинуто")}
+function toggleSound(){
+  sound=!sound;if(sound)audio();
+  $("#bSound span").textContent="Звук: "+(sound?"увімк":"вимк");$("#bSound").setAttribute("aria-pressed",sound);beep();
+}
+function toggleFull(){
+  const p=document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
+  if(p)p.catch(()=>toast("Браузер не дозволив повноекранний режим.",1));
+}
+function toggleSeries(k){
+  off.has(k)?off.delete(k):off.add(k);
+  document.querySelectorAll("#leg button").forEach(b=>b.setAttribute("aria-pressed",!off.has(b.dataset.k)));
+  $("#tip").hidden=true;drawCabin();
+}
+function clearForm(){$("#manual").reset()}
+function sendManual(){
+  const values={};let bad=null;
+  document.querySelectorAll("#form input").forEach(e=>{
+    if(e.value==="")return;
+    if(!e.checkValidity()&&!bad)bad=e;
+    values[e.name]=e.value;
+  });
+  if(bad){bad.focus();return toast(`${META.metrics[bad.name].name}: значення має бути від ${bad.min} до ${bad.max}.`,2)}
+  if(!Object.keys(values).length)return toast("Введіть хоча б один показник.",1);
+  act(async()=>{await api("/api/readings",{astronaut:cur,values});clearForm()},"Вимір збережено: "+cur);
+}
+function done(i){const a=acts[i];if(a)act(()=>api("/api/actions",{astronaut:cur,text:a.metric+": "+a.text}),"Записано в журнал дій")}
+function scenario(k){if(cur)act(()=>api("/api/simulate",{astronaut:cur,scenario:k}),k=="reset"?"Сценарій скинуто: "+cur:`Сценарій «${SC[k]}»: ${cur}`)}
+function callDoctor(){
+  const c=crew.find(x=>x.astronaut==cur);if(!c)return;
+  const bad=c.items.filter(i=>i.level).map(i=>`${i.name} ${i.value} ${i.unit}`).join(", ")||"показники в нормі";
+  ask("Викликати лікаря польоту?",`${cur} — стан: ${c.label} (${bad}). Виклик буде записано в журнал дій.`,
+    ()=>act(()=>api("/api/actions",{astronaut:cur,text:`Викликано лікаря польоту. Стан: ${c.label} (${bad})`}),"Лікаря польоту викликано: "+cur));
+}
+function exportCsv(){if(cur){$("#export").click();toast("Завантаження історії: "+cur,0)}}
+function showHelp(){const d=$("#help");d.open?d.close():d.showModal()}
+function clock(){
+  if(!endAt)return;const s=Math.max(0,Math.round((endAt-Date.now())/1000));
+  const hms=x=>[Math.floor(x/3600),Math.floor(x%3600/60),x%60].map(n=>String(n).padStart(2,"0")).join(":");
+  $("#left").textContent=hms(s);$("#met").textContent="T+ "+hms(Math.max(0,missionLen-s));
+}
+
+/* ---------- клавіатура ----------
+   Використовуємо event.code (фізична клавіша), тому скорочення працюють і в українській розкладці. */
+const KEYS={KeyA:()=>openProfile(),KeyV:toggleVoice,KeyI:toggleIncidents,KeyP:togglePause,Space:togglePause,KeyM:toggleSound,KeyR:resetAll,KeyF:toggleFull,KeyD:callDoctor,KeyE:exportCsv,
+  KeyH:showHelp,F1:showHelp,ArrowLeft:()=>step(-1),ArrowRight:()=>step(1),
+  KeyS:()=>{const f=$("#form input");if(f){f.focus();f.scrollIntoView({block:"center"})}},
+  KeyT:()=>toggleSeries("temp"),KeyB:()=>toggleSeries("pressure"),KeyO:()=>toggleSeries("oxygen")};
+document.addEventListener("keydown",e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey||e.isComposing)return;
+  const t=e.target instanceof Element?e.target:document.body,typing=t.matches("input,select,textarea");
+  if(e.code=="Escape"&&typing){t.blur();return}
+  if(document.querySelector("dialog[open]")){            // у відкритому вікні працюють лише Esc/Enter і закриття довідки
+    if($("#help").open&&(e.code=="KeyH"||e.code=="F1"||e.code=="Slash")){e.preventDefault();$("#help").close()}
+    return;
+  }
+  if(typing)return;                                       // під час введення чисел скорочення вимкнені
+  if(t.closest(".pc")&&(e.code=="Enter"||e.code=="Space")){e.preventDefault();const n=+t.closest(".pc").dataset.i;pick(n);if(e.code=="Enter")openProfile(n);return}
+  if((e.code=="Space"||e.code=="Enter")&&t.closest("button,a,summary"))return;  // звичайна дія кнопки
+  if(e.repeat)return;
+  const digit=/^(Digit|Numpad)([0-9])$/.exec(e.code);
+  if(digit){
+    const n=+digit[2];
+    if(e.shiftKey){const k=n?Object.keys(META?META.scenarios:{})[n-1]:"reset";if(k){e.preventDefault();scenario(k)}}
+    else if(!n)return;
+    else if(n<=crew.length){e.preventDefault();pick(n-1)}
+    return;
+  }
+  if(e.code=="Slash"&&e.shiftKey||e.key=="?"){e.preventDefault();showHelp();return}
+  if(e.shiftKey)return;
+  const fn=KEYS[e.code];
+  if(fn){e.preventDefault();fn()}
+});
+
+/* ---------- запуск ---------- */
+$("#leg").innerHTML=SER.map(([k,n,col,,,key])=>`<button data-k="${k}" aria-pressed="true" style="--c:${col}" title="Клавіша ${key}" onclick="toggleSeries('${k}')">${n}</button>`).join("");
+$("#crew").addEventListener("click",e=>{const c=e.target.closest(".pc");if(c){pick(+c.dataset.i);openProfile(+c.dataset.i)}});
+requestAnimationFrame(drawEcg);
+$("#crew").addEventListener("error",e=>{const im=e.target;if(im.tagName=="IMG"){const d=document.createElement("div");d.className="ph";d.textContent=im.dataset.ini;im.replaceWith(d)}},true);
+$("#manual").addEventListener("submit",e=>{e.preventDefault();sendManual()});
+$("#metricSel").addEventListener("change",drawMetric);
+$("#sayForm").addEventListener("submit",e=>{e.preventDefault();sayAs()});
+if("speechSynthesis" in window){loadVoices();speechSynthesis.addEventListener("voiceschanged",loadVoices)}
+$("#cchart").addEventListener("mousemove",cabinTip);
+$("#cchart").addEventListener("mouseleave",()=>$("#tip").hidden=true);
+$("#export").addEventListener("click",e=>{if(!cur)e.preventDefault()});
+$("#exportM").addEventListener("click",e=>{if(!cur)e.preventDefault()});
+document.addEventListener("fullscreenchange",()=>$("#bFull").setAttribute("aria-pressed",!!document.fullscreenElement));
+document.addEventListener("pointerdown",audio,{once:true});
+let rz;window.addEventListener("resize",()=>{clearTimeout(rz);rz=setTimeout(()=>{drawCabin();drawMetric()},100)});
+setInterval(clock,1000);
+refresh();setInterval(refresh,2000);
+</script>
+</body>
+</html>
